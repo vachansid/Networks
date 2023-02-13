@@ -12,6 +12,7 @@
 #include <arpa/inet.h>
 #include <sys/poll.h>
 #include <time.h>
+#include<fcntl.h>
 
 #define SIZE 8096
 
@@ -80,7 +81,7 @@ int connect_server(char *ip, int port)
 	if ((connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr))) < 0) 
 	{
 		perror("Unable to connect to server\n");
-		exit(0);
+		return -1;
 	}
 	else
 	{
@@ -88,7 +89,26 @@ int connect_server(char *ip, int port)
 	}
 	return sockfd;
 }
-
+int recvf(int sockfd,char* buf,int len,int flag,int pdf)
+{
+      int bytes_sent=0;
+      int chunk_size=100;
+      while(1)
+      { 
+          char* chunks=malloc(chunk_size*sizeof(char));
+          memset(chunks,0,chunk_size);
+		  //printf("1");
+          int t=recv(sockfd,chunks,chunk_size,flag);
+          if(t<0) return t;
+          strcat(buf,chunks);
+          bytes_sent+=t;
+          if(bytes_sent+chunk_size>len) break;
+          if(t==0) break;
+		  if(pdf==1) continue;
+		  if(chunks[t-1]=='\0') break;
+      }
+     return bytes_sent;  
+} 
 int main()
 {
 	while(1)
@@ -237,7 +257,7 @@ int main()
 			send(sockfd,"Connection: close\n",18,0);
 			send(sockfd,"\0",1,0);
 			printf("%s",buf);
-			/*
+			memset(buf,0,SIZE);
 			struct pollfd fdset;
 			fdset.fd = sockfd;
 			fdset.events = POLLIN;
@@ -250,24 +270,31 @@ int main()
 			}
 			else
 			{
+                while(1)
+				{
+
+			         int bytes=recvf(sockfd,buf,SIZE,0,0);
+
+				}
 				
-			}*/
+
+			}
 
 		}
 		else if(strcmp(str,"PUT") == 0)
 		{
 			char* url = strtok(NULL,delimiter);
 			char* filepath = strtok(NULL,delimiter);
-			printf("%s\n", url);
-			printf("%s\n", filepath);
+			//printf("%s\n", url);
+			//printf("%s\n", filepath);
 			char *ip = (char *)malloc(20*sizeof(char));
 			get_ip(url,ip);
-			printf("%s\n", ip);
+			//printf("%s\n", ip);
 			int port = get_port(url);
-			printf("%d\n",port);
+			//printf("%d\n",port);
 			char buf[SIZE];
 			memset(buf,0,sizeof(buf));
-			printf("1");
+			//printf("1");
 			int sockfd = connect_server(ip,port);
 			strcat(buf, "PUT ");
 			send(sockfd,"PUT ",4,0);
@@ -340,15 +367,8 @@ int main()
 			send(sockfd,"Accept-Language: en-US,en;q=0.8\n",32,0);
 			strcat(buf,"Content-language: en-US\n");
 			send(sockfd,"Content-language: en-US\n",24,0);
-
-			FILE *fp = fopen(filepath, "rb");
-			if (fp == NULL) 
-			{
-				perror("Error opening file");
-				continue;
-			}
-
-			// Get the size of the file
+			FILE * fp;
+			fp = fopen(filepath,"rb");
 			fseek(fp, 0L, SEEK_END);
 			long file_size = ftell(fp);
 			printf("%ld\n",file_size);
@@ -400,21 +420,20 @@ int main()
 			send(sockfd,"\n",1,0);
 
 			// Allocate memory for the buffer
-			char line[SIZE];
-			memset(line,0,8096);
-			while (fgets(line,SIZE,fp) != NULL)
+		    printf("%s",buf);
+			memset(buf,0,SIZE);
+			int read_size;
+			long long int x=file_size;
+			while((read_size=fread(buf,1,SIZE,fp))>0)
 			{
-				//strcat(buf,line);
-				send(sockfd,line,strlen(line),0);
-				printf("%s",line);
+				send(sockfd,buf,read_size,0);
+				x-=read_size;
+				printf("%lld\n",x);
+				memset(buf,0,SIZE);
 			}
-			strcat(buf,"\0");
-			send(sockfd,"\0",1,0);
-			fclose(fp);
-			
-			printf("%s",buf);
-			/*
-			struct pollfd fdset;
+            fclose(fp);
+
+			/*struct pollfd fdset;
 			fdset.fd = sockfd;
 			fdset.events = POLLIN;
 			int timeout = 3000;
@@ -426,7 +445,17 @@ int main()
 			}
 			else
 			{
+               int bytes=recvf(sockfd,buf,SIZE,0,0);
+			   char *content=seperate_content(buf);
+			   int headerCount;
+			   char **headers=split_into_lines(buf,&headerCount,10);
 
+			   if(strcmp(headers[0],"HTTP/1.1 200 OK")==0)
+			   {
+                   
+			   }
+
+               
 			}*/
 		}
 		else if(strcmp(str,"QUIT") == 0)
@@ -438,6 +467,7 @@ int main()
 			printf("Only GET, PUT, QUIT Command-line operators are supported\n");
 			continue;
 		}
+        
 	}
 	/*
 	// Opening a socket is exactly similar to the server process 
